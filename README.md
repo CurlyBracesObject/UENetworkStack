@@ -1,4 +1,5 @@
 UE4 网络通信技术栈完整演示项目
+视频演示链接： https://www.bilibili.com/video/BV1kmutz4Ehm/
 开发工具： 虚幻引擎4.27 C++ + JetBrains Rider + VSCode + ProtoShell编译器集成
 项目描述： 基于虚幻引擎4开发的完整网络通信技术栈演示项目，深入探索HTTP协议、Socket编程、数据序列化等核心网络技术。项目从底层Socket API构建网络通信层，实现多种通信协议和数据格式的性能对比测试，为现代游戏网络开发提供完整的技术参考和最佳实践。
 核心技术实现
@@ -7,7 +8,7 @@ UE4 网络通信技术栈完整演示项目
 并发编程技术
 多线程网络监听机制实现、FRunnable接口继承的异步数据接收、线程安全的资源管理和优雅关闭机制。解决多线程环境下的Socket资源竞争和数据同步问题。
 数据序列化方案
-XML传统文本格式解析处理、Google Protobuf高效二进制序列化集成、UTF-8与TCHAR编码转换机制。通过实际数据对比测试，XML格式156字节 vs Protobuf格式18字节，压缩效率提升8.6倍。
+XML传统文本格式解析处理、Google Protobuf高效二进制序列化集成、UTF-8与TCHAR编码转换机制。通过实际数据对比测试，XML格式81字节 vs Protobuf格式18字节，压缩效率提升4.5倍。
 引擎扩展开发
 虚幻引擎第三方库静态链接配置、Protobuf编译工具链集成、跨平台兼容性处理。解决UE4项目中外部依赖库的编译配置和版本兼容问题。
 技术亮点
@@ -17,158 +18,40 @@ XML传统文本格式解析处理、Google Protobuf高效二进制序列化集�
 •	工具链集成方案：VSCode Protobuf开发、ProtoShell编译集成、UE4项目配置的完整技术栈
 主要代码实现
 HTTP通信模块
-cpp
-class FHttpHelper {
-public:
-    void RequestHttpGet(const TCHAR* Url);
-    void RequestHttpPost(const TCHAR* Url, const FString& Msg);
-    
-private:
-    void OnResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
-    void OnResponsePost(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
-};
-
-// HTTP GET请求实现
 void FHttpHelper::RequestHttpGet(const TCHAR* Url) {
     TSharedPtr<IHttpRequest,ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
     HttpRequest->SetURL(Url);
     HttpRequest->SetHeader(TEXT("User-Agent"), TEXT("X-UnrealEngine-Agent"));
-    HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     HttpRequest->SetVerb(TEXT("Get"));
-    HttpRequest->OnProcessRequestComplete().BindRaw(this, &FHttpHelper::OnResponse);
     HttpRequest->ProcessRequest();
 }
-Socket TCP通信
-cpp
-class FSocketHepler : public FRunnable {
-public:
-    bool Connect(const FString& IP, const int32 Port);
-    void Listen();
-    void SendMessage(const FString& Message);
-    void Close();
-    
-protected:
-    virtual uint32 Run() override;
-    
-private:
-    FSocket* NativeSocket;
-    FRunnableThread* MyThread;
-    bool bReceiving;
-};
-
-// TCP连接建立
+Socket TCP连接
 bool FSocketHepler::Connect(const FString& IP, const int32 Port) {
     TSharedRef<FInternetAddr> FInternetAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
-    bool IsValid = false;
     FInternetAddr->SetIp(*IP, IsValid);
-    if(!IsValid) {
-        UE_LOG(LogTemp, Log, TEXT("Address format error"));
-        return false;
-    }
     FInternetAddr->SetPort(Port);
     NativeSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("MySocket"));
     return NativeSocket->Connect(*FInternetAddr);
 }
-
-// 多线程数据接收
-uint32 FSocketHepler::Run() {
-    uint8* buffer = new uint8[1024];
-    int32 RecSize = 0;
-    
-    while (bReceiving) {
-        if (!NativeSocket || !bReceiving) break;
-        
-        bool bSuccess = NativeSocket->Recv(buffer, 1024, RecSize);
-        if (bSuccess && RecSize > 0) {
-            FUTF8ToTCHAR UTC(reinterpret_cast<ANSICHAR*>(buffer), RecSize);
-            FString Msg(UTC.Length(), UTC.Get());
-            UE_LOG(LogTemp, Log, TEXT("socket received data：%s"), *Msg);
-        }
-    }
-    delete[] buffer;
-    return 0;
-}
 UDP无连接通信
-cpp
-class FUdpHelper : public FRunnable {
-public:
-    void SendMessage(const FString& Msg);
-    void StartListen();
-    void Close();
-    
-protected:
-    virtual uint32 Run() override;
-    
-private:
-    FSocket* UdpSocket;
-    FRunnableThread* MyThread;
-    bool bReceiving;
-};
-
-// UDP消息发送
 void FUdpHelper::SendMessage(const FString& Msg) {
-    if(!UdpSocket) {
-        UdpSocket = FUdpSocketBuilder(TEXT("MyUdp")).AsReusable().AsBlocking();
-    }
-    
+    UdpSocket = FUdpSocketBuilder(TEXT("MyUdp")).AsReusable().AsBlocking();
     TSharedRef<FInternetAddr> InterAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
-    bool IsValid = false;
     InterAddr->SetIp(TEXT("127.0.0.1"), IsValid);
     InterAddr->SetPort(8050);
-    
-    FTCHARToUTF8 Data(*Msg, Msg.Len());
-    TArray<uint8> Buffer;
-    Buffer.Append(reinterpret_cast<const uint8*>(Data.Get()), Data.Length());
-    int SendSize = 0;
     UdpSocket->SendTo(Buffer.GetData(), Buffer.Num(), SendSize, *InterAddr);
 }
 XML数据解析
-cpp
-// XML文件解析和大小统计
 void AUNativeNetGameModeBase::ParseXML() {
     TSharedPtr<FXmlFile> XmlFileCompare = MakeShareable(new FXmlFile);
     if(XmlFileCompare->LoadFile(TEXT("e:\\mybox.xml"))) {
         FXmlNode* RootNode = XmlFileCompare->GetRootNode();
-        if(RootNode) {
-            FString Age = RootNode->GetAttribute(TEXT("age"));
-            FString Name = RootNode->GetAttribute(TEXT("name"));
-            TArray<FXmlNode*> NumsNode = RootNode->GetChildrenNodes();
-            
-            UE_LOG(LogTemp, Log, TEXT("XML Data - Age:%s,Name:%s, ArraySize:%d"), *Age, *Name, NumsNode.Num());
-            
-            FString XmlContent;
-            if(FFileHelper::LoadFileToString(XmlContent, TEXT("e:\\mybox.xml"))) {
-                int32 XmlSize = XmlContent.Len();
-                UE_LOG(LogTemp, Log, TEXT("Xml File Size: %d bytes"), XmlSize);
-            }
-        }
+        FString Age = RootNode->GetAttribute(TEXT("age"));
+        FString Name = RootNode->GetAttribute(TEXT("name"));
+        UE_LOG(LogTemp, Log, TEXT("Xml File Size: %d bytes"), XmlSize);
     }
 }
 Protobuf序列化
-protobuf
-// MyBox.proto定义
-syntax = "proto3";
-package Uejoy.Other;
-
-enum EColor {
-    option allow_alias=true;
-    EC_Red=0;
-    EC_Blue=1;
-    EC_RedAlias=0;
-}
-
-message Box {
-    string name=1;
-}
-
-message MyBox {
-    int32 age=1;
-    string name=2;
-    repeated int32 nums=3;
-    Box b1=4;
-}
-cpp
-// Protobuf序列化测试
 void AUNativeNetGameModeBase::TestProtobuf() {
     MyBox box;
     box.set_age(100);
@@ -176,11 +59,76 @@ void AUNativeNetGameModeBase::TestProtobuf() {
     box.add_nums(10);
     box.add_nums(20);
     
-    UE_LOG(LogTemp, Log, TEXT("Age:%d,Name: %s,theArraySize: %d"),
-        box.age(), UTF8_TO_TCHAR(box.name().c_str()), box.nums_size());
+    std::string data;
+    box.SerializeToString(&data);
+    UE_LOG(LogTemp, Log, TEXT("Serialized size：%d bytes"), data.size());
+}
+同样的数据格式对比测试显示，XML文件占用81字节，而Protobuf序列化后仅需18字节，数据传输效率提升4.5倍，充分展现了二进制序列化在游戏网络通信中的显著优势。
+________________________________________
+UE4 Complete Network Communication Technology Stack Demo Project
+Video Demo Link: https://www.bilibili.com/video/BV1kmutz4Ehm/
+Development Tools: Unreal Engine 4.27 C++ + JetBrains Rider + VSCode + ProtoShell Compiler Integration
+Project Description: A comprehensive network communication technology stack demonstration project based on Unreal Engine 4, deeply exploring core networking technologies including HTTP protocols, Socket programming, and data serialization. The project builds network communication layers from underlying Socket APIs, implements performance comparison tests for multiple communication protocols and data formats, providing complete technical reference and best practices for modern game network development.
+Core Technical Implementation
+Network Communication Foundation
+Deep understanding of essential differences between TCP/UDP protocols, implementing HTTP GET/POST request handling, Socket TCP connection-oriented communication, and UDP connectionless data transmission mechanisms. Network connection stability and data transmission reliability verified through NetSoldier testing tools.
+Concurrent Programming Technology
+Multi-threaded network listening mechanism implementation, asynchronous data reception through FRunnable interface inheritance, thread-safe resource management and graceful shutdown mechanisms. Solving Socket resource competition and data synchronization issues in multi-threaded environments.
+Data Serialization Solutions
+Traditional XML text format parsing and processing, Google Protobuf efficient binary serialization integration, UTF-8 and TCHAR encoding conversion mechanisms. Through actual data comparison testing, XML format 81 bytes vs Protobuf format 18 bytes, compression efficiency improved by 4.5 times.
+Engine Extension Development
+Unreal Engine third-party library static linking configuration, Protobuf compilation toolchain integration, cross-platform compatibility handling. Solving compilation configuration and version compatibility issues for external dependency libraries in UE4 projects.
+Technical Highlights
+•	Low-level Network Programming Practice: Building communication frameworks from Socket API level, deeply understanding network protocol stack principles and data transmission mechanisms
+•	Performance Optimization Comparison Verification: Quantitative analysis of transmission efficiency differences between different serialization solutions through actual XML and Protobuf data testing
+•	Enterprise-level Code Standards: Complete error handling mechanisms, resource management strategies, thread-safe implementation and graceful shutdown processes
+•	Toolchain Integration Solutions: VSCode Protobuf development, ProtoShell compilation integration, complete technology stack of UE4 project configuration
+Main Code Implementation
+HTTP Communication Module
+void FHttpHelper::RequestHttpGet(const TCHAR* Url) {
+    TSharedPtr<IHttpRequest,ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+    HttpRequest->SetURL(Url);
+    HttpRequest->SetHeader(TEXT("User-Agent"), TEXT("X-UnrealEngine-Agent"));
+    HttpRequest->SetVerb(TEXT("Get"));
+    HttpRequest->ProcessRequest();
+}
+Socket TCP Connection
+bool FSocketHepler::Connect(const FString& IP, const int32 Port) {
+    TSharedRef<FInternetAddr> FInternetAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
+    FInternetAddr->SetIp(*IP, IsValid);
+    FInternetAddr->SetPort(Port);
+    NativeSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("MySocket"));
+    return NativeSocket->Connect(*FInternetAddr);
+}
+UDP Connectionless Communication
+void FUdpHelper::SendMessage(const FString& Msg) {
+    UdpSocket = FUdpSocketBuilder(TEXT("MyUdp")).AsReusable().AsBlocking();
+    TSharedRef<FInternetAddr> InterAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
+    InterAddr->SetIp(TEXT("127.0.0.1"), IsValid);
+    InterAddr->SetPort(8050);
+    UdpSocket->SendTo(Buffer.GetData(), Buffer.Num(), SendSize, *InterAddr);
+}
+XML Data Parsing
+void AUNativeNetGameModeBase::ParseXML() {
+    TSharedPtr<FXmlFile> XmlFileCompare = MakeShareable(new FXmlFile);
+    if(XmlFileCompare->LoadFile(TEXT("e:\\mybox.xml"))) {
+        FXmlNode* RootNode = XmlFileCompare->GetRootNode();
+        FString Age = RootNode->GetAttribute(TEXT("age"));
+        FString Name = RootNode->GetAttribute(TEXT("name"));
+        UE_LOG(LogTemp, Log, TEXT("Xml File Size: %d bytes"), XmlSize);
+    }
+}
+Protobuf Serialization
+void AUNativeNetGameModeBase::TestProtobuf() {
+    MyBox box;
+    box.set_age(100);
+    box.set_name("PlayerData");
+    box.add_nums(10);
+    box.add_nums(20);
     
     std::string data;
     box.SerializeToString(&data);
     UE_LOG(LogTemp, Log, TEXT("Serialized size：%d bytes"), data.size());
 }
+Performance comparison testing shows that XML files occupy 81 bytes while Protobuf serialization requires only 18 bytes, improving data transmission efficiency by 4.5 times, fully demonstrating the significant advantages of binary serialization in game network communication.
 
