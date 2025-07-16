@@ -11,15 +11,14 @@ XML传统文本格式解析处理、Google Protobuf高效二进制序列化集�
 引擎扩展开发
 虚幻引擎第三方库静态链接配置、Protobuf编译工具链集成、跨平台兼容性处理。解决UE4项目中外部依赖库的编译配置和版本兼容问题。
 技术亮点
-
-底层网络编程实践：从Socket API层面构建通信框架，深入理解网络协议栈原理和数据传输机制
-性能优化对比验证：通过XML与Protobuf实际数据测试，量化分析不同序列化方案的传输效率差异
-企业级代码规范：完整的错误处理机制、资源管理策略、线程安全实现和优雅关闭流程
-工具链集成方案：VSCode Protobuf开发、ProtoShell编译集成、UE4项目配置的完整技术栈
-
+•	底层网络编程实践：从Socket API层面构建通信框架，深入理解网络协议栈原理和数据传输机制
+•	性能优化对比验证：通过XML与Protobuf实际数据测试，量化分析不同序列化方案的传输效率差异
+•	企业级代码规范：完整的错误处理机制、资源管理策略、线程安全实现和优雅关闭流程
+•	工具链集成方案：VSCode Protobuf开发、ProtoShell编译集成、UE4项目配置的完整技术栈
 主要代码实现
 HTTP通信模块
-cppclass FHttpHelper {
+cpp
+class FHttpHelper {
 public:
     void RequestHttpGet(const TCHAR* Url);
     void RequestHttpPost(const TCHAR* Url, const FString& Msg);
@@ -40,7 +39,8 @@ void FHttpHelper::RequestHttpGet(const TCHAR* Url) {
     HttpRequest->ProcessRequest();
 }
 Socket TCP通信
-cppclass FSocketHepler : public FRunnable {
+cpp
+class FSocketHepler : public FRunnable {
 public:
     bool Connect(const FString& IP, const int32 Port);
     void Listen();
@@ -89,7 +89,8 @@ uint32 FSocketHepler::Run() {
     return 0;
 }
 UDP无连接通信
-cppclass FUdpHelper : public FRunnable {
+cpp
+class FUdpHelper : public FRunnable {
 public:
     void SendMessage(const FString& Msg);
     void StartListen();
@@ -122,7 +123,8 @@ void FUdpHelper::SendMessage(const FString& Msg) {
     UdpSocket->SendTo(Buffer.GetData(), Buffer.Num(), SendSize, *InterAddr);
 }
 XML数据解析
-cpp// XML文件解析和大小统计
+cpp
+// XML文件解析和大小统计
 void AUNativeNetGameModeBase::ParseXML() {
     TSharedPtr<FXmlFile> XmlFileCompare = MakeShareable(new FXmlFile);
     if(XmlFileCompare->LoadFile(TEXT("e:\\mybox.xml"))) {
@@ -143,7 +145,8 @@ void AUNativeNetGameModeBase::ParseXML() {
     }
 }
 Protobuf序列化
-protobuf// MyBox.proto定义
+protobuf
+// MyBox.proto定义
 syntax = "proto3";
 package Uejoy.Other;
 
@@ -164,7 +167,8 @@ message MyBox {
     repeated int32 nums=3;
     Box b1=4;
 }
-cpp// Protobuf序列化测试
+cpp
+// Protobuf序列化测试
 void AUNativeNetGameModeBase::TestProtobuf() {
     MyBox box;
     box.set_age(100);
@@ -179,3 +183,4 @@ void AUNativeNetGameModeBase::TestProtobuf() {
     box.SerializeToString(&data);
     UE_LOG(LogTemp, Log, TEXT("Serialized size：%d bytes"), data.size());
 }
+
